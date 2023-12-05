@@ -1,60 +1,73 @@
 //
-//  Client.swift
+//  File.swift
 //  RickAndMorty
 //
-//  Created by Diplomado on 02/12/23.
+//  Created by Eric Margay on 02/12/23.
 //
 
 import Foundation
-import Combine
 
 struct Client {
-    static let rickAndMorty = Client("https://rickandmortyapi.com")
-    let session = URLSession.shared
+    let session: URLSession
     let baseUrl: String
     private let contentType: String
-
+    
     enum NetworkError: Error {
-        case conection
-        case invalidRequest
-        case invalidResponse
-        case client
-        case server
-    }
-
-    init(_ baseUrl: String, contentType: String = "application/json") {
+            case connection
+            case invalidRequest
+            case invalidResponse
+            case client
+            case server
+            
+            var localizedDescription: String {
+                switch self {
+                case .connection:
+                    return "Connection error"
+                case .invalidRequest:
+                    return "Invalid request"
+                case .invalidResponse:
+                    return "Invalid response"
+                case .client:
+                    return "Client error"
+                case .server:
+                    return "Server error"
+                }
+            }
+        }
+    
+    init(session: URLSession = URLSession.shared, baseUrl: String, contentType: String = "application/json") {
+        self.session = session
         self.baseUrl = baseUrl
         self.contentType = contentType
     }
-
+    
     typealias requesHandler = ((Data?) -> Void)
     typealias errorHandler = ((NetworkError) -> Void)
-
-    func get(_ path: String, query: [String: String] = [:], success: requesHandler?, failure: errorHandler? = nil) {
-        request(method: "GET", path: path, query: query, body: nil, success: success, failure: failure)
+    
+    func get(_ path: String, queryParams: [String: String] = [:] , success: requesHandler?, failure: errorHandler? = nil) {
+        request(method: "GET", path: path, body: nil, queryParams: queryParams, success: success, failure: failure)
     }
-
-    // Request via GCD using response handlers
-    func request(method: String, path: String, query: [String: String] = [:], body: Data?, success: requesHandler?, failure: errorHandler? = nil) {
-        guard let request = buildRequest(method: method, path: path, query: query, body: body) else {
+    
+    func request(method: String, path: String, body: Data?,queryParams: [String: String] = [:], success: requesHandler?, failure: errorHandler? = nil) {
+        guard let request = buildRequest(method: method, path: path, body: body, queryParams: queryParams) else {
             failure?(NetworkError.invalidRequest)
             return
         }
-
+        
         let task = session.dataTask(with: request) { data, response, error in
             if let err = error {
                 #if DEBUG
                 debugPrint(err)
                 #endif
-                failure?(NetworkError.conection)
+                failure?(NetworkError.connection)
                 return
             }
-
+            
             guard let httpResponse = response as? HTTPURLResponse else {
                 failure?(NetworkError.invalidResponse)
                 return
             }
-
+            
             let status = StatusCode(rawValue: httpResponse.statusCode)
             #if DEBUG
             print("Status: \(httpResponse.statusCode)")
@@ -64,87 +77,24 @@ struct Client {
             case .success:
                 success?(data)
             case .clientError:
-                failure?(.client)
+                failure?(NetworkError.client)
             case .serverError:
-                failure?(.server)
+                failure?(NetworkError.server)
             default:
-                failure?(.invalidResponse)
+                failure?(NetworkError.invalidResponse)
             }
         }
         task.resume()
     }
-
-    // Request via async/await with Result type
-    func request(method: String, path: String, body: Data?) async throws -> Result<Data?, NetworkError> {
-        guard let request = buildRequest(method: method, path: path, body: body) else {
-            return .failure(NetworkError.invalidRequest)
-        }
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            return .failure(.invalidResponse)
-        }
-
-        let status = StatusCode(rawValue: httpResponse.statusCode)
-        #if DEBUG
-        print("Status: \(httpResponse.statusCode)")
-        debugPrint(httpResponse)
-        #endif
-        switch status {
-        case .success:
-            return .success(data)
-        case .clientError:
-            return .failure(.client)
-        case .serverError:
-            return .failure(.server)
-        default:
-            return .failure(.invalidResponse)
-        }
-    }
-
-    func requestPublisher(method: String, path: String, body: Data?) -> AnyPublisher<Data?, NetworkError> {
-        guard let request = buildRequest(method: method, path: path, body: body) else {
-            return Fail(error: NetworkError.invalidRequest).eraseToAnyPublisher()
-        }
-        return session
-            .dataTaskPublisher(for: request)
-            .tryMap { (data, response) -> Data? in
-                let httpResponse = response as! HTTPURLResponse
-                let status = StatusCode(rawValue: httpResponse.statusCode)
-                #if DEBUG
-                print("Status: \(httpResponse.statusCode)")
-                debugPrint(httpResponse)
-                #endif
-                switch status {
-                case .success: break
-                case .clientError:
-                    throw NetworkError.client
-                case .serverError:
-                    throw NetworkError.server
-                default:
-                    throw NetworkError.invalidResponse
-                }
-                return data
-            }
-            .mapError { error -> NetworkError in
-                switch error {
-                case NetworkError.client:
-                    return .client
-                case NetworkError.server:
-                    return .server
-                default:
-                    return NetworkError.invalidResponse
-                }
-            }
-            .eraseToAnyPublisher()
-    }
-
-    private func buildRequest(method: String, path: String, query: [String: String] = [:], body: Data?) -> URLRequest? {
-        guard var urlComp = URLComponents(string: baseUrl) else { return nil }
+    
+    private func buildRequest(method: String, path: String, body: Data?, queryParams: [String: String] = [:]) -> URLRequest? {
+        var urlComp = URLComponents(string: baseUrl)!
         urlComp.path = path
-        urlComp.queryItems = query.map { (key, value) in
-            URLQueryItem(name: key, value: value)
+        
+        urlComp.queryItems = queryParams.map { (key , value ) in
+         URLQueryItem(name: key, value: value)
         }
-
+        
         guard let url = urlComp.url else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -155,4 +105,8 @@ struct Client {
         #endif
         return request
     }
+    
+    
+    
 }
+

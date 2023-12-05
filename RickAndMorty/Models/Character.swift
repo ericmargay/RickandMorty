@@ -2,13 +2,16 @@
 //  Character.swift
 //  RickAndMorty
 //
-//  Created by Diplomado on 02/12/23.
+//  Created by Eric Margay on 02/12/23.
 //
-
 import Foundation
 
-struct Character: Codable, Identifiable {
+struct Character: Codable{
     let id: Int
     let name: String
     let species: String
 }
+
+
+
+

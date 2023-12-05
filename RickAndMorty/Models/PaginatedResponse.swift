@@ -2,19 +2,29 @@
 //  PaginatedResponse.swift
 //  RickAndMorty
 //
-//  Created by Diplomado on 02/12/23.
+//  Created by Eric Margay on 02/12/23.
 //
 
 import Foundation
 
-struct PageInfo: Codable {
+struct PaginatedResponse<T: Codable>: Codable {
+    let info: Info
+    let results: [T]
+
+    private enum CodingKeys: String, CodingKey {
+        case info
+        case results
+    }
+}
+
+struct Info: Codable {
     let count: Int
     let pages: Int
     let next: String?
     let prev: String?
 }
 
-struct PaginatedResponse<T: Codable>: Codable {
-    let info: PageInfo
-    let results: [T]
+struct APIEndpoints {
+    static let character = "/api/character/"
 }
+
